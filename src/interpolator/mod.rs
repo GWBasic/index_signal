@@ -4,31 +4,32 @@ use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
 pub type GetSampleClosure = dyn Fn(usize) -> f32;
 
-pub trait SampleProvider<TChannelId>
+pub trait SampleProvider<TChannelId, TError>
 where TChannelId : Copy {
     // TODOs:
     // - Pass through errors instead of relying on panic
-    fn get_sample(&self, channel_id: TChannelId, index: usize) -> f32;
+    fn get_sample(&self, channel_id: TChannelId, index: usize) -> Result<f32, TError>;
 }
 
-pub struct Interpolator<TSampleProvider, TChannelId>
+pub struct Interpolator<TSampleProvider, TChannelId, TError>
 where
-    TSampleProvider : SampleProvider<TChannelId>,
+    TSampleProvider : SampleProvider<TChannelId, TError>,
     TChannelId : Copy
 {
     fft: Arc<dyn Fft<f32>>,
     scratch: RefCell<Vec<Complex32>>,
     sample_provider: TSampleProvider,
     // Not sure how to remove this
-    _workaround: Option<TChannelId>
+    _workaround: Option<TChannelId>,
+    _workaround2: Option<TError>
 }
 
-impl<TSampleProvider, TChannelId> Interpolator<TSampleProvider, TChannelId>
+impl<TSampleProvider, TChannelId, TError> Interpolator<TSampleProvider, TChannelId, TError>
 where
-    TSampleProvider : SampleProvider<TChannelId>,
+    TSampleProvider : SampleProvider<TChannelId, TError>,
     TChannelId : Copy
 {
-    pub fn new(sample_provider: TSampleProvider) -> Interpolator<TSampleProvider, TChannelId> {
+    pub fn new(sample_provider: TSampleProvider) -> Interpolator<TSampleProvider, TChannelId, TError> {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(2);
         let scratch_length = fft.get_inplace_scratch_len();
@@ -37,11 +38,12 @@ where
             fft,
             scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
             sample_provider,
-            _workaround: None
+            _workaround: None,
+            _workaround2: None
         }
     }
 
-    pub fn get_interpolated_sample(&self, channel_id: TChannelId, index: f32) -> f32 {
+    pub fn get_interpolated_sample(&self, channel_id: TChannelId, index: f32) -> Result<f32, TError> {
         let index_truncated = index.trunc();
         let index_truncated_usize = index_truncated as usize;
         if index == index_truncated {
@@ -50,8 +52,8 @@ where
 
         // TODO: Cache the transform
 
-        let sample0 = self.sample_provider.get_sample(channel_id, index_truncated_usize);
-        let sample1 = self.sample_provider.get_sample(channel_id, index_truncated_usize + 1);
+        let sample0 = self.sample_provider.get_sample(channel_id, index_truncated_usize)?;
+        let sample1 = self.sample_provider.get_sample(channel_id, index_truncated_usize + 1)?;
 
         let mut transform = vec![
             Complex32 {
@@ -75,6 +77,6 @@ where
         }
 
         let freq_part = phase_between_samples.cos() * upper_amplitude;
-        return freq_part + amplitude;
+        return Ok(freq_part + amplitude);
     }
 }

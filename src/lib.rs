@@ -2,20 +2,22 @@ pub mod interpolator;
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Error, ErrorKind, Result};
+
     use super::*;
 
     use interpolator::{Interpolator, SampleProvider};
 
     struct NyquistSampleProvider {}
 
-    impl SampleProvider<&str> for NyquistSampleProvider {
-        fn get_sample(&self, channel_id: &str, index: usize) -> f32 {
+    impl SampleProvider<&str, Error> for NyquistSampleProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
             assert!(channel_id.eq("test"));
 
             if index % 2 == 0 {
-                1.0
+                Ok(1.0)
             } else {
-                -1.0
+                Ok(-1.0)
             }
         }
     }
@@ -24,22 +26,44 @@ mod tests {
     fn whole_sample() {
         let interpolator = Interpolator::new(NyquistSampleProvider {});
 
-        assert_eq!(1.0, interpolator.get_interpolated_sample("test", 0.0));
-        assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 1.0));
-        assert_eq!(1.0, interpolator.get_interpolated_sample("test", 2.0));
-        assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 3.0));
+        assert_eq!(1.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
+        assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 1.0).unwrap());
+        assert_eq!(1.0, interpolator.get_interpolated_sample("test", 2.0).unwrap());
+        assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 3.0).unwrap());
     }
 
     #[test]
     fn partial_sample() {
         let interpolator = Interpolator::new(NyquistSampleProvider {});
 
-        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 0.5));
-        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 1.5));
-        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 2.5));
-        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 3.5));
+        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 0.5).unwrap());
+        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 1.5).unwrap());
+        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 2.5).unwrap());
+        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 3.5).unwrap());
     }
 
-    // Need a test that opens a .wav file on disk
-    // This is mainly to make sure I understand the memory model
+    struct ErrorSampleProvider {}
+
+    impl SampleProvider<&str, Error> for ErrorSampleProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
+            assert!(channel_id.eq("test"));
+
+            if index == 3 {
+                Err(Error::from(ErrorKind::BrokenPipe))
+            } else {
+                Ok(index as f32)
+            }
+        }
+    }
+
+    #[test]
+    fn errors_passthrough() {
+        let interpolator = Interpolator::new(ErrorSampleProvider {});
+
+        assert_eq!(0.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
+
+        assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 3.0).unwrap_err().kind());
+        assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 2.1).unwrap_err().kind());
+        assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 3.1).unwrap_err().kind());
+    }
 }
