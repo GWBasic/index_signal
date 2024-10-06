@@ -4,14 +4,23 @@ use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
 pub type GetSampleClosure = dyn Fn(usize) -> f32;
 
-pub struct Interpolator {
-    fft: Arc<dyn Fft<f32>>,
-    scratch: RefCell<Vec<Complex32>>,
-    get_sample: Box<GetSampleClosure>,
+pub trait SampleProvider {
+    // TODOs:
+    // - Channel index
+    // - Pass through errors instead of relying on panic
+    fn get_sample(&self, index: usize) -> f32;
 }
 
-impl Interpolator {
-    pub fn new(get_sample: Box<GetSampleClosure>) -> Interpolator {
+pub struct Interpolator<TSampleProvider>
+where TSampleProvider : SampleProvider {
+    fft: Arc<dyn Fft<f32>>,
+    scratch: RefCell<Vec<Complex32>>,
+    sample_provider: TSampleProvider,
+}
+
+impl<TSampleProvider> Interpolator<TSampleProvider>
+where TSampleProvider : SampleProvider {
+    pub fn new(sample_provider: TSampleProvider) -> Interpolator<TSampleProvider> {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(2);
         let scratch_length = fft.get_inplace_scratch_len();
@@ -19,7 +28,7 @@ impl Interpolator {
         Interpolator {
             fft,
             scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
-            get_sample,
+            sample_provider,
         }
     }
 
@@ -27,11 +36,13 @@ impl Interpolator {
         let index_truncated = index.trunc();
         let index_truncated_usize = index_truncated as usize;
         if index == index_truncated {
-            return (self.get_sample)(index_truncated_usize);
+            return self.sample_provider.get_sample(index_truncated_usize);
         }
 
-        let sample0 = (self.get_sample)(index_truncated_usize);
-        let sample1 = (self.get_sample)(index_truncated_usize + 1);
+        // TODO: Cache the transform
+
+        let sample0 = self.sample_provider.get_sample(index_truncated_usize);
+        let sample1 = self.sample_provider.get_sample(index_truncated_usize + 1);
 
         let mut transform = vec![
             Complex32 {
