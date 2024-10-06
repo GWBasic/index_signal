@@ -94,8 +94,6 @@ mod tests {
         assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 3.1).unwrap_err().kind());
     }
 
-    // \left(\sin\left(x\right)+\left(\sin\ \frac{x}{\left(3\right)}\right)+\sin\left(x\ \cdot\ 1.6\right)+\cos\left(x\cdot5.2\right)\right)\ \cdot0.25
-
     struct SignalSampleProvider {}
 
     fn get_signal_sample(x: f32) -> f32 {
