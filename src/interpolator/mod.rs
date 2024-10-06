@@ -4,23 +4,31 @@ use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
 pub type GetSampleClosure = dyn Fn(usize) -> f32;
 
-pub trait SampleProvider {
+pub trait SampleProvider<TChannelId>
+where TChannelId : Copy {
     // TODOs:
-    // - Channel index
     // - Pass through errors instead of relying on panic
-    fn get_sample(&self, index: usize) -> f32;
+    fn get_sample(&self, channel_id: TChannelId, index: usize) -> f32;
 }
 
-pub struct Interpolator<TSampleProvider>
-where TSampleProvider : SampleProvider {
+pub struct Interpolator<TSampleProvider, TChannelId>
+where
+    TSampleProvider : SampleProvider<TChannelId>,
+    TChannelId : Copy
+{
     fft: Arc<dyn Fft<f32>>,
     scratch: RefCell<Vec<Complex32>>,
     sample_provider: TSampleProvider,
+    // Not sure how to remove this
+    _workaround: Option<TChannelId>
 }
 
-impl<TSampleProvider> Interpolator<TSampleProvider>
-where TSampleProvider : SampleProvider {
-    pub fn new(sample_provider: TSampleProvider) -> Interpolator<TSampleProvider> {
+impl<TSampleProvider, TChannelId> Interpolator<TSampleProvider, TChannelId>
+where
+    TSampleProvider : SampleProvider<TChannelId>,
+    TChannelId : Copy
+{
+    pub fn new(sample_provider: TSampleProvider) -> Interpolator<TSampleProvider, TChannelId> {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(2);
         let scratch_length = fft.get_inplace_scratch_len();
@@ -29,20 +37,21 @@ where TSampleProvider : SampleProvider {
             fft,
             scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
             sample_provider,
+            _workaround: None
         }
     }
 
-    pub fn get_interpolated_sample(&self, index: f32) -> f32 {
+    pub fn get_interpolated_sample(&self, channel_id: TChannelId, index: f32) -> f32 {
         let index_truncated = index.trunc();
         let index_truncated_usize = index_truncated as usize;
         if index == index_truncated {
-            return self.sample_provider.get_sample(index_truncated_usize);
+            return self.sample_provider.get_sample(channel_id, index_truncated_usize);
         }
 
         // TODO: Cache the transform
 
-        let sample0 = self.sample_provider.get_sample(index_truncated_usize);
-        let sample1 = self.sample_provider.get_sample(index_truncated_usize + 1);
+        let sample0 = self.sample_provider.get_sample(channel_id, index_truncated_usize);
+        let sample1 = self.sample_provider.get_sample(channel_id, index_truncated_usize + 1);
 
         let mut transform = vec![
             Complex32 {
