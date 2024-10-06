@@ -1,4 +1,4 @@
-use std::{cell::RefCell, f32::consts::TAU, sync::Arc};
+use std::{cell::RefCell, f32::consts::TAU, marker::PhantomData, sync::Arc};
 
 use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
@@ -19,9 +19,7 @@ where
     fft: Arc<dyn Fft<f32>>,
     scratch: RefCell<Vec<Complex32>>,
     sample_provider: TSampleProvider,
-    // Not sure how to remove this
-    _workaround: Option<TChannelId>,
-    _workaround2: Option<TError>
+    _phantom_data: PhantomData<(TChannelId, TError)>
 }
 
 impl<TSampleProvider, TChannelId, TError> Interpolator<TSampleProvider, TChannelId, TError>
@@ -38,8 +36,7 @@ where
             fft,
             scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
             sample_provider,
-            _workaround: None,
-            _workaround2: None
+            _phantom_data: PhantomData
         }
     }
 
