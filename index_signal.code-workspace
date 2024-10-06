@@ -9,6 +9,7 @@
 			"consts",
 			"fract",
 			"inplace",
+			"Nyquist",
 			"rustfft",
 			"trunc"
 		]
