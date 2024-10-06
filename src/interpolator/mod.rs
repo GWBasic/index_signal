@@ -68,7 +68,7 @@ where
         let (upper_amplitude, phase) = transform[1].to_polar();
         let upper_amplitude = upper_amplitude * 0.5;
 
-        let mut phase_between_samples = ((index.fract() / 2.0) * TAU) + 0.25 + phase;
+        let mut phase_between_samples = ((index.fract() / 2.0) * TAU) + phase;
         if phase_between_samples > TAU {
             phase_between_samples -= TAU;
         }
