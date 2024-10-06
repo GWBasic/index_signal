@@ -93,4 +93,36 @@ mod tests {
         assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 2.1).unwrap_err().kind());
         assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 3.1).unwrap_err().kind());
     }
+
+    // \left(\sin\left(x\right)+\left(\sin\ \frac{x}{\left(3\right)}\right)+\sin\left(x\ \cdot\ 1.6\right)+\cos\left(x\cdot5.2\right)\right)\ \cdot0.25
+
+    struct SignalSampleProvider {}
+
+    fn get_signal_sample(x: f32) -> f32 {
+        let y = x.sin() + (x/3.0).sin() + (x*1.6).sin() + (x*5.2).cos();
+        y / 4.0
+    }
+
+    impl SampleProvider<&str, Error> for SignalSampleProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
+            assert!(channel_id.eq("test"));
+
+            Ok(get_signal_sample(index as f32))
+        }
+    }
+
+    #[test]
+    fn continuous_signal() {
+        let interpolator = Interpolator::new(SignalSampleProvider {});
+
+        let mut x = 0.0;
+        while x <= 100.0 {
+            let expected_sample = get_signal_sample(x);
+            let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
+
+            assert(expected_sample, actual_sample, &format!("When reading from a continuous sample at index {}", x));
+
+            x += 0.01;
+        }
+    }
 }
