@@ -2,7 +2,7 @@ pub mod interpolator;
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Error, ErrorKind, Result};
+    use std::{f32::consts::PI, io::{Error, ErrorKind, Result}};
 
     use super::*;
 
@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn whole_sample() {
-        let interpolator = Interpolator::new(NyquistSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, NyquistSampleProvider {});
 
         assert_eq!(1.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
         assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 1.0).unwrap());
@@ -42,13 +42,13 @@ mod tests {
     }
 
     #[test]
-    fn partial_sample() {
-        let interpolator = Interpolator::new(NyquistSampleProvider {});
+    fn partial_sample_nyquist() {
+        let interpolator = Interpolator::new(20, 200, NyquistSampleProvider {});
 
-        assert(0.0, interpolator.get_interpolated_sample("test", 0.5).unwrap(), "Wrong value for 0.5");
-        assert(0.0, interpolator.get_interpolated_sample("test", 1.5).unwrap(), "Wrong value for 0.5");
-        assert(0.0, interpolator.get_interpolated_sample("test", 2.5).unwrap(), "Wrong value for 0.5");
-        assert(0.0, interpolator.get_interpolated_sample("test", 3.5).unwrap(), "Wrong value for 0.5");
+        assert(0.0, interpolator.get_interpolated_sample("test", 100.5).unwrap(), "Wrong value for 100.5");
+        assert(0.0, interpolator.get_interpolated_sample("test", 101.5).unwrap(), "Wrong value for 101.5");
+        assert(0.0, interpolator.get_interpolated_sample("test", 102.5).unwrap(), "Wrong value for 102.5");
+        assert(0.0, interpolator.get_interpolated_sample("test", 103.5).unwrap(), "Wrong value for 103.5");
     }
 
     struct DCSampleProvider {
@@ -64,9 +64,9 @@ mod tests {
 
     #[test]
     fn dc() {
-        let interpolator = Interpolator::new(DCSampleProvider {result: 0.75});
+        let interpolator = Interpolator::new(20, 200, DCSampleProvider {result: 0.75});
 
-        assert_eq!(0.75, interpolator.get_interpolated_sample("dc", 0.5).unwrap());
+        assert_eq!(0.75, interpolator.get_interpolated_sample("dc", 100.5).unwrap());
     }
 
     struct ErrorSampleProvider {}
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn errors_passthrough() {
-        let interpolator = Interpolator::new(ErrorSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, ErrorSampleProvider {});
 
         assert_eq!(0.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
 
@@ -94,10 +94,37 @@ mod tests {
         assert_eq!(ErrorKind::BrokenPipe, interpolator.get_interpolated_sample("test", 3.1).unwrap_err().kind());
     }
 
+    struct FourSampleWavelengthSignalProvider {}
+
+    fn get_four_sample_wavelength_sample(x: f32) -> f32 {
+        let arg = x * PI / 2.0;
+        let y = arg.sin();
+        y
+    }
+
+    impl SampleProvider<&str, Error> for FourSampleWavelengthSignalProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
+            assert!(channel_id.eq("test"));
+
+            Ok(get_four_sample_wavelength_sample(index as f32))
+        }
+    }
+
+    #[test]
+    fn four_sample_wavelength() {
+        let interpolator = Interpolator::new(4, 2000, FourSampleWavelengthSignalProvider {});
+
+        let expected = get_four_sample_wavelength_sample(10.2);
+        let actual = interpolator.get_interpolated_sample("test", 10.2).unwrap();
+
+        assert(expected, actual, "Wrong value for a four-sample window");
+    }
+
     struct SignalSampleProvider {}
 
     fn get_signal_sample(x: f32) -> f32 {
-        let y = x.sin() + (x/3.0).sin() + (x*1.6).sin() + (x*5.2).cos();
+        let y = x.sin() + (x/3.0).sin() + (x/1.6).sin() + (x/5.2).cos();
+        //let y = (x/5.2).cos();
         y / 4.0
     }
 
@@ -111,16 +138,19 @@ mod tests {
 
     #[test]
     fn continuous_signal() {
-        let interpolator = Interpolator::new(SignalSampleProvider {});
+        let interpolator = Interpolator::new(60, 2000, SignalSampleProvider {});
 
-        let mut x = 0.0;
-        while x <= 100.0 {
+        let mut x = 500.0;
+        while x <= 1500.0 {
             let expected_sample = get_signal_sample(x);
             let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
 
             assert(expected_sample, actual_sample, &format!("When reading from a continuous sample at index {}", x));
+            //println!("Expected: {}, Actual: {} ({})", expected_sample, actual_sample, x);
 
             x += 0.01;
         }
+
+        //assert_eq!(1, 0);
     }
 }
