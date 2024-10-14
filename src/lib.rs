@@ -98,7 +98,7 @@ mod tests {
 
     fn get_four_sample_wavelength_sample(x: f32) -> f32 {
         let arg = x * PI / 2.0;
-        let y = arg.sin();
+        let y = arg.cos();
         y
     }
 

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, f32::consts::TAU, marker::PhantomData, sync::Arc};
+use std::{cell::RefCell, f32::consts::{PI, TAU}, marker::PhantomData, sync::Arc};
 
 use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
@@ -94,10 +94,12 @@ where
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
 
-            let tau_divisor = ((self.window_size / 2) - freq_index + 1) as f32;
-            let tau_range = TAU / tau_divisor;
+            // For performance this can go into a lookup table
+            let frequency_cycles_in_transform = ((self.window_size / 2) - freq_index + 1) as f32;
+            let tau_range_between_samples = TAU / frequency_cycles_in_transform;
 
-            let mut phase_between_samples = ((index.fract() / 2.0) * tau_range) + phase;
+            let mut phase_between_samples =
+                ((index.fract() / 2.0) * tau_range_between_samples) + phase;
             if phase_between_samples > TAU {
                 phase_between_samples -= TAU;
             }
