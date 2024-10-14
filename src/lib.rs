@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn whole_sample() {
-        let interpolator = Interpolator::new(NyquistSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, NyquistSampleProvider {});
 
         assert_eq!(1.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
         assert_eq!(-1.0, interpolator.get_interpolated_sample("test", 1.0).unwrap());
@@ -43,7 +43,7 @@ mod tests {
 
     #[test]
     fn partial_sample() {
-        let interpolator = Interpolator::new(NyquistSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, NyquistSampleProvider {});
 
         assert(0.0, interpolator.get_interpolated_sample("test", 0.5).unwrap(), "Wrong value for 0.5");
         assert(0.0, interpolator.get_interpolated_sample("test", 1.5).unwrap(), "Wrong value for 0.5");
@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn dc() {
-        let interpolator = Interpolator::new(DCSampleProvider {result: 0.75});
+        let interpolator = Interpolator::new(20, 200, DCSampleProvider {result: 0.75});
 
         assert_eq!(0.75, interpolator.get_interpolated_sample("dc", 0.5).unwrap());
     }
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn errors_passthrough() {
-        let interpolator = Interpolator::new(ErrorSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, ErrorSampleProvider {});
 
         assert_eq!(0.0, interpolator.get_interpolated_sample("test", 0.0).unwrap());
 
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn continuous_signal() {
-        let interpolator = Interpolator::new(SignalSampleProvider {});
+        let interpolator = Interpolator::new(20, 200, SignalSampleProvider {});
 
         let mut x = 0.0;
         while x <= 100.0 {

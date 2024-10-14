@@ -11,6 +11,7 @@
 			"inplace",
 			"Nyquist",
 			"rustfft",
+			"sinc",
 			"trunc",
 			"ulps"
 		]
