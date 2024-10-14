@@ -66,7 +66,7 @@ mod tests {
     fn dc() {
         let interpolator = Interpolator::new(20, 200, DCSampleProvider {result: 0.75});
 
-        assert_eq!(0.75, interpolator.get_interpolated_sample("dc", 0.5).unwrap());
+        assert_eq!(0.75, interpolator.get_interpolated_sample("dc", 50.5).unwrap());
     }
 
     struct ErrorSampleProvider {}
