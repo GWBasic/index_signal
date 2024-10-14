@@ -124,7 +124,6 @@ mod tests {
 
     fn get_signal_sample(x: f32) -> f32 {
         let y = x.sin() + (x/3.0).sin() + (x/1.6).sin() + (x/5.2).cos();
-        //let y = (x/5.2).cos();
         y / 4.0
     }
 
@@ -150,7 +149,5 @@ mod tests {
 
             x += 0.01;
         }
-
-        //assert_eq!(1, 0);
     }
 }

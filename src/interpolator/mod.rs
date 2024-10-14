@@ -8,8 +8,6 @@ pub trait SampleProvider<TChannelId, TError>
 where
     TChannelId: Copy,
 {
-    // TODOs:
-    // - Pass through errors instead of relying on panic
     fn get_sample(&self, channel_id: TChannelId, index: usize) -> Result<f32, TError>;
 }
 
@@ -47,7 +45,7 @@ where
             scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
             sample_provider,
             window_size,
-            scale: 1.0/(window_size as f32),//.sqrt(),
+            scale: 1.0 / (window_size as f32), //.sqrt(),
             num_samples,
             _phantom_data: PhantomData,
         }
@@ -74,12 +72,13 @@ where
         for window_sample_index in
             (index_truncated_isize - half_window_size)..(index_truncated_isize + half_window_size)
         {
-            let sample = if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
-                self.sample_provider
-                    .get_sample(channel_id, window_sample_index as usize)?
-            } else {
-                0.0
-            };
+            let sample =
+                if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
+                    self.sample_provider
+                        .get_sample(channel_id, window_sample_index as usize)?
+                } else {
+                    0.0
+                };
 
             transform.push(Complex32 {
                 re: sample,
@@ -90,25 +89,11 @@ where
         let mut scratch = self.scratch.borrow_mut();
         self.fft.process_with_scratch(&mut transform, &mut scratch);
         let (dc, _) = transform[0].to_polar();
-        let mut amplitude_sum = dc;// / (self.window_size as f32);
-        /*
-        let (upper_amplitude, phase) = transform[1].to_polar();
-        let upper_amplitude = upper_amplitude * 0.5;
-
-        let mut phase_between_samples = ((index.fract() / 2.0) * TAU) + phase;
-        if phase_between_samples > TAU {
-            phase_between_samples -= TAU;
-        }
-
-        let freq_part = phase_between_samples.cos() * upper_amplitude;
-        return Ok(freq_part + amplitude);
-        */
+        let mut amplitude_sum = dc;
 
         for freq_index in 1..=(self.window_size / 2) {
-            //let wavelength_samples = self.window_size / freq_index;
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
-            //let freq_amplitude = upper_amplitude  / (self.window_size as f32);
-    
+
             let tau_divisor = ((self.window_size / 2) - freq_index + 1) as f32;
             let tau_range = TAU / tau_divisor;
 
@@ -116,7 +101,7 @@ where
             if phase_between_samples > TAU {
                 phase_between_samples -= TAU;
             }
-    
+
             let freq_part = phase_between_samples.cos() * freq_amplitude;
             amplitude_sum += freq_part;
         }
