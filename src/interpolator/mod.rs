@@ -94,6 +94,30 @@ where
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
 
+            // Algorithm to get the sample's value for this frequency
+            // ----
+            // Convert index to fraction through the cycle
+            // Add phase
+            // Get cosine
+
+            // How to get fraction through the cycle:
+            // Calculate the fraction of a single sample in the wavelength
+            // Add offset from this sample
+
+            // This can be in a lookup table for speed
+            let fraction_of_sample_in_wavelength = 1.0 / ((self.window_size as f32) / (freq_index as f32)) * TAU;
+            let fraction_of_index_from_center = fraction_of_sample_in_wavelength * index.fract();
+
+            let mut phase_between_samples = phase + fraction_of_index_from_center;
+            
+            // Special case for lowest frequency because the sample at the midpoint is halfway through the cycle
+            if freq_index == 1 {
+                phase_between_samples += PI;
+            }
+
+            /*
+
+
             // For performance this can go into a lookup table
             let frequency_cycles_in_transform = ((self.window_size / 2) - freq_index + 1) as f32;
             let tau_range_between_samples = TAU / frequency_cycles_in_transform;
@@ -103,7 +127,7 @@ where
             if phase_between_samples > TAU {
                 phase_between_samples -= TAU;
             }
-
+*/
             let freq_part = phase_between_samples.cos() * freq_amplitude;
             amplitude_sum += freq_part;
         }
