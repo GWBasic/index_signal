@@ -123,19 +123,6 @@ where
                 phase_between_samples += PI;
             }
 
-            /*
-
-
-            // For performance this can go into a lookup table
-            let frequency_cycles_in_transform = ((self.window_size / 2) - freq_index + 1) as f32;
-            let tau_range_between_samples = TAU / frequency_cycles_in_transform;
-
-            let mut phase_between_samples =
-                ((index.fract() / 2.0) * tau_range_between_samples) + phase;
-            if phase_between_samples > TAU {
-                phase_between_samples -= TAU;
-            }
-*/
             let freq_part = phase_between_samples.cos() * freq_amplitude;
             amplitude_sum += freq_part;
         }
