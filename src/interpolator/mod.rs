@@ -163,7 +163,12 @@ where
             // (This can be precalculated and cached)
             let phase_shift_per_sample = TAU / (self.window_size as f32 / freq_index as f32);
             let phase_adjustment = phase_shift_per_sample * index.fract();
-            let adjusted_phase = phase + phase_adjustment + PI;
+            let mut adjusted_phase = phase + phase_adjustment;
+
+            // When the wavelength is the entire transform, it needs a PI phase shift
+            if freq_index == 1 {
+                adjusted_phase += PI;
+            }
 
             let freq_part = adjusted_phase.cos() * freq_amplitude;
             amplitude_sum += freq_part;
