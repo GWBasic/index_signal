@@ -1,4 +1,9 @@
-use std::{cell::RefCell, f32::consts::{PI, TAU}, marker::PhantomData, sync::Arc};
+use std::{
+    cell::RefCell,
+    f32::consts::{PI, TAU},
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
@@ -98,32 +103,69 @@ where
         let (dc, _) = transform[0].to_polar();
         let mut amplitude_sum = dc;
 
+        //let index_in_window = (index - index_truncated) + ((self.window_size as f32) / 2.0);
+
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
             let freq_amplitude = freq_amplitude * 2.0;
 
-            // Algorithm to get the sample's value for this frequency
-            // ----
-            // Convert index to fraction through the cycle
-            // Add phase
-            // Get cosine
+            /*
 
-            // How to get fraction through the cycle:
-            // Calculate the fraction of a single sample in the wavelength
-            // Add offset from this sample
+                        // Algorithm to get the sample's value for this frequency
+                        // ----
+                        // Convert index to fraction through the cycle
+                        // Add phase
+                        // Get cosine
 
-            // This can be in a lookup table for speed
-            let fraction_of_sample_in_wavelength = 1.0 / ((self.window_size as f32) / (freq_index as f32)) * TAU;
-            let fraction_of_index_from_center = fraction_of_sample_in_wavelength * index.fract();
+                        // How to get fraction through the cycle:
+                        // Calculate the fraction of a single sample in the wavelength
+                        // Add offset from this sample
 
-            let mut phase_between_samples = phase + fraction_of_index_from_center;
-            
-            // Special case for lowest frequency because the sample at the midpoint is halfway through the cycle
-            if freq_index == 1 {
-                phase_between_samples += PI;
+                        // This can be in a lookup table for speed
+                        let fraction_of_sample_in_wavelength = 1.0 / ((self.window_size as f32) / (freq_index as f32)) * TAU;
+                        let fraction_of_index_from_center = fraction_of_sample_in_wavelength * index.fract();
+
+                        let mut phase_between_samples = phase + fraction_of_index_from_center;
+
+                        // Special case for lowest frequency because the sample at the midpoint is halfway through the cycle
+                        if freq_index == 1 {
+                            phase_between_samples += PI;
+                        }
+
+                        let freq_part = phase_between_samples.cos() * freq_amplitude;
+                        amplitude_sum += freq_part;
+            */
+
+            /*
+                        // This can be in a lookup table for speed
+                        //let mut x = (index_in_window / (self.window_size as f32 / freq_index as f32)) * TAU;
+                        let mut x = index_in_window * (TAU / (self.window_size as f32 / freq_index as f32));
+                        x += phase;
+
+                        let freq_part = x.cos() * freq_amplitude;
+                        amplitude_sum += freq_part;
+            */
+            /*
+
+            let mut x = (sample_ctr as f32 / num_samples_f32) * TAU;
+
+            // Adjust by phase
+            x += phase;
+            if x > TAU {
+                x -= TAU;
             }
 
-            let freq_part = phase_between_samples.cos() * freq_amplitude;
+            sine_wave_via_function[sample_ctr] = x.cos();
+
+            */
+
+            // Fraction of tau for each sample
+            // (This can be precalculated and cached)
+            let phase_shift_per_sample = TAU / (self.window_size as f32 / freq_index as f32);
+            let phase_adjustment = phase_shift_per_sample * index.fract();
+            let adjusted_phase = phase + phase_adjustment + PI;
+
+            let freq_part = adjusted_phase.cos() * freq_amplitude;
             amplitude_sum += freq_part;
         }
 

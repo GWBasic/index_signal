@@ -459,13 +459,14 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Copy, Clone)]
     struct SineSignalProvider {
         wavelength_in_samples: f32
     }
 
     impl SineSignalProvider {
         fn get_sine_signal_sample(&self, x: f32) -> f32 {
-            let arg = x * PI / self.wavelength_in_samples / 2.0;
+            let arg = x * (PI / (self.wavelength_in_samples / 2.0));
             let y = arg.sin();
             y
         }
@@ -486,23 +487,23 @@ mod tests {
     }
 
     fn test_wavelength(wavelength_in_samples: f32) {
-        let interpolator = Interpolator::new(8, 2000, SineSignalProvider {
+        let sine_signal_provider = SineSignalProvider {
             wavelength_in_samples
-        });
+        };
+
+        let interpolator = Interpolator::new(8, 2000, sine_signal_provider);
 
         print_waveforms(
             500.0,
-            600.0,
+            510.0,
             "test",
-            Box::new(SineSignalProvider {
-                wavelength_in_samples
-            }),
+            Box::new(sine_signal_provider),
             &interpolator,
         );
 
         let mut x = 500.0;
         while x <= 1500.0 {
-            let expected_sample = get_signal_sample(x);
+            let expected_sample = sine_signal_provider.get_sine_signal_sample(x);
             let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
 
             assert(
