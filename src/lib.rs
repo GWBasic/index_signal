@@ -458,4 +458,95 @@ mod tests {
             x += 0.01;
         }
     }
+
+    struct SineSignalProvider {
+        wavelength_in_samples: f32
+    }
+
+    impl SineSignalProvider {
+        fn get_sine_signal_sample(&self, x: f32) -> f32 {
+            let arg = x * PI / self.wavelength_in_samples / 2.0;
+            let y = arg.sin();
+            y
+        }
+    }
+
+    impl FloatIndexSampleProvider for SineSignalProvider {
+        fn get_sample_float(&self, index: f32) -> f32 {
+            self.get_sine_signal_sample(index)
+        }
+    }
+
+    impl SampleProvider<&str, Error> for SineSignalProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
+            assert!(channel_id.eq("test"));
+
+            Ok(self.get_sine_signal_sample(index as f32))
+        }
+    }
+
+    fn test_wavelength(wavelength_in_samples: f32) {
+        let interpolator = Interpolator::new(8, 2000, SineSignalProvider {
+            wavelength_in_samples
+        });
+
+        print_waveforms(
+            500.0,
+            600.0,
+            "test",
+            Box::new(SineSignalProvider {
+                wavelength_in_samples
+            }),
+            &interpolator,
+        );
+
+        let mut x = 500.0;
+        while x <= 1500.0 {
+            let expected_sample = get_signal_sample(x);
+            let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
+
+            assert(
+                expected_sample,
+                actual_sample,
+                &format!("When reading from a continuous sample at index {}", x),
+            );
+
+            x += 0.01;
+        }
+    }
+
+    #[test]
+    fn wavelength_2_sample() {
+        test_wavelength(2.0);
+    }
+
+    #[test]
+    fn wavelength_3_sample() {
+        test_wavelength(3.0);
+    }
+
+    #[test]
+    fn wavelength_4_sample() {
+        test_wavelength(4.0);
+    }
+
+    #[test]
+    fn wavelength_5_sample() {
+        test_wavelength(5.0);
+    }
+
+    #[test]
+    fn wavelength_6_sample() {
+        test_wavelength(6.0);
+    }
+
+    #[test]
+    fn wavelength_7_sample() {
+        test_wavelength(7.0);
+    }
+
+    #[test]
+    fn wavelength_8_sample() {
+        test_wavelength(8.0);
+    }
 }
