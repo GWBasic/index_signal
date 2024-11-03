@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn continuous_signal() {
-        let interpolator = Interpolator::new(60, 2000, SignalSampleProvider {});
+        let interpolator = Interpolator::new(120, 2000, SignalSampleProvider {});
 
         print_waveforms(
             500.0,
