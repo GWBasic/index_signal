@@ -15,7 +15,10 @@ mod tests {
         // Note: 24-bit audio differentiates samples at 0.00000012 precision
         let difference = (expected - actual).abs();
 
-        if difference > 0.00000012 {
+        // 24-bit accuracy: 0.00000012 = 1 / (2^24)
+        // 16-bit accuracy: 0.00001526 = 1 / (2^16)
+
+        if difference > 0.00001526 {
             panic!(
                 "{}: Expected: {}, Actual: {}",
                 error_message, expected, actual

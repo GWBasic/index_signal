@@ -39,13 +39,20 @@ where
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(window_size);
         let scratch_length = fft.get_inplace_scratch_len();
+        let scratch = vec![Complex32::new(0.0, 0.0); scratch_length];
+
+        // Calculate scale
+        //let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
+        //fft.process_with_scratch(&mut scale_transform, &mut scratch);
+        //let (scale_denominator, _) = scale_transform[0].to_polar();
 
         Interpolator {
             fft,
-            scratch: RefCell::new(vec![Complex32::new(0.0, 0.0); scratch_length]),
+            scratch: RefCell::new(scratch),
             sample_provider,
             window_size,
-            scale: 1.0 / (window_size as f32), //.sqrt(),
+            //scale: 1.0 / scale_denominator,
+            scale: 1.0 / (window_size as f32),
             num_samples,
             _phantom_data: PhantomData,
         }
@@ -93,6 +100,7 @@ where
 
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
+            let freq_amplitude = freq_amplitude * 2.0;
 
             // Algorithm to get the sample's value for this frequency
             // ----
