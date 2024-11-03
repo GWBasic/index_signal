@@ -336,7 +336,10 @@ mod tests {
             index < end
         } {}
 
+        let bar = "-".repeat(NUM_SAMPLES_IN_OUTPUT);
+
         println!("Expected");
+        println!("{}", bar);
         println!("{}", sample_provider_0);
         println!("{}", sample_provider_1);
         println!("{}", sample_provider_2);
@@ -347,8 +350,10 @@ mod tests {
         println!("{}", sample_provider_7);
         println!("{}", sample_provider_8);
         println!("{}", sample_provider_9);
+        println!("{}", bar);
         println!();
         println!("Actual");
+        println!("{}", bar);
         println!("{}", interpolator_0);
         println!("{}", interpolator_1);
         println!("{}", interpolator_2);
@@ -359,6 +364,7 @@ mod tests {
         println!("{}", interpolator_7);
         println!("{}", interpolator_8);
         println!("{}", interpolator_9);
+        println!("{}", bar);
     }
 
     struct FourSampleWavelengthSignalProvider {}
