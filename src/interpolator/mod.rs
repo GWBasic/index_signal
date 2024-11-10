@@ -1,9 +1,4 @@
-use std::{
-    cell::RefCell,
-    f32::consts::{PI, TAU},
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{cell::RefCell, marker::PhantomData, sync::Arc};
 
 use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
@@ -29,6 +24,7 @@ where
     window_size: usize,
     scale: f32,
     num_samples: usize,
+    phase_shifts_per_sample: Vec<f32>,
 
     _phantom_data: PhantomData<(TChannelId, TError)>,
 }
@@ -53,10 +49,25 @@ where
         let scratch_inverse_length = fft_forward.get_inplace_scratch_len();
         let mut scratch_inverse = vec![Complex32::new(0.0, 0.0); scratch_inverse_length];
 
-        // Calculate scale
+        // Calculate scale: Transform a DC signal of 1.0 back and forth to determine scale
         let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
         fft_forward.process_with_scratch(&mut scale_transform, &mut scratch_forward);
         fft_inverse.process_with_scratch(&mut scale_transform, &mut scratch_inverse);
+
+        // Calculate phase shifts per sample: Transform sine waves of 1.0, shift by one sample, transform back
+        let mut phase_transform = vec![Complex32::from_polar(1.0, 0.0); window_size];
+        phase_transform[0] = Complex32::from_polar(0.0, 0.0);
+        fft_inverse.process_with_scratch(&mut phase_transform, &mut scratch_inverse);
+
+        let first_sample = phase_transform.remove(0);
+        phase_transform.push(first_sample);
+        fft_forward.process_with_scratch(&mut phase_transform, &mut scratch_forward);
+
+        let mut phase_shifts_per_sample = Vec::with_capacity(window_size / 2);
+        for freq_index in 0..=(window_size / 2) {
+            let (_, phase_shift_for_frequency) = phase_transform[freq_index].to_polar();
+            phase_shifts_per_sample.push(phase_shift_for_frequency);
+        }
 
         Interpolator {
             fft_forward,
@@ -67,6 +78,7 @@ where
             window_size,
             scale: scale_transform[0].re,
             num_samples,
+            phase_shifts_per_sample,
             _phantom_data: PhantomData,
         }
     }
@@ -93,8 +105,8 @@ where
         let half_window_size_usize = self.window_size / 2;
         let half_window_size_isize = half_window_size_usize as isize;
 
-        for window_sample_index in
-            (index_truncated_isize - half_window_size_isize)..(index_truncated_isize + half_window_size_isize)
+        for window_sample_index in (index_truncated_isize - half_window_size_isize)
+            ..(index_truncated_isize + half_window_size_isize)
         {
             let sample =
                 if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
@@ -117,10 +129,9 @@ where
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
 
-            // Fraction of tau for each sample
-            // (This can be precalculated and cached)
-            let phase_shift_per_sample = TAU / (self.window_size as f32 / freq_index as f32);
-            let phase_adjustment = phase_shift_per_sample * index.fract();
+            // Adjust phase for frequency
+            let phase_shift_for_sample = self.phase_shifts_per_sample[freq_index];
+            let phase_adjustment = phase_shift_for_sample * index.fract();
             let adjusted_phase = phase + phase_adjustment;
 
             transform[freq_index] = Complex32::from_polar(freq_amplitude, adjusted_phase);
