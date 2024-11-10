@@ -21,8 +21,10 @@ where
     TSampleProvider: SampleProvider<TChannelId, TError>,
     TChannelId: Copy,
 {
-    fft: Arc<dyn Fft<f32>>,
-    scratch: RefCell<Vec<Complex32>>,
+    fft_forward: Arc<dyn Fft<f32>>,
+    scratch_forward: RefCell<Vec<Complex32>>,
+    fft_inverse: Arc<dyn Fft<f32>>,
+    scratch_inverse: RefCell<Vec<Complex32>>,
     sample_provider: TSampleProvider,
     window_size: usize,
     scale: f32,
@@ -42,26 +44,33 @@ where
         sample_provider: TSampleProvider,
     ) -> Interpolator<TSampleProvider, TChannelId, TError> {
         let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(window_size);
-        let scratch_length = fft.get_inplace_scratch_len();
-        let scratch = vec![Complex32::new(0.0, 0.0); scratch_length];
+
+        let fft_forward = planner.plan_fft_forward(window_size);
+        let scratch_forward_length = fft_forward.get_inplace_scratch_len();
+        let mut scratch_forward = vec![Complex32::new(0.0, 0.0); scratch_forward_length];
+
+        let fft_inverse = planner.plan_fft_inverse(window_size);
+        let scratch_inverse_length = fft_forward.get_inplace_scratch_len();
+        let mut scratch_inverse = vec![Complex32::new(0.0, 0.0); scratch_inverse_length];
 
         // Calculate scale
-        //let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
-        //fft.process_with_scratch(&mut scale_transform, &mut scratch);
-        //let (scale_denominator, _) = scale_transform[0].to_polar();
+        let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
+        fft_forward.process_with_scratch(&mut scale_transform, &mut scratch_forward);
+        fft_inverse.process_with_scratch(&mut scale_transform, &mut scratch_inverse);
 
         Interpolator {
-            fft,
-            scratch: RefCell::new(scratch),
+            fft_forward,
+            scratch_forward: RefCell::new(scratch_forward),
+            fft_inverse,
+            scratch_inverse: RefCell::new(scratch_inverse),
             sample_provider,
             window_size,
-            //scale: 1.0 / scale_denominator,
-            scale: 1.0 / (window_size as f32),
+            scale: scale_transform[0].re,
             num_samples,
             _phantom_data: PhantomData,
         }
     }
+
     pub fn get_interpolated_sample(
         &self,
         channel_id: TChannelId,
@@ -80,9 +89,12 @@ where
 
         let mut transform = Vec::with_capacity(self.window_size);
 
-        let half_window_size = (self.window_size / 2) as isize;
+        // TODO: Cache half window size
+        let half_window_size_usize = self.window_size / 2;
+        let half_window_size_isize = half_window_size_usize as isize;
+
         for window_sample_index in
-            (index_truncated_isize - half_window_size)..(index_truncated_isize + half_window_size)
+            (index_truncated_isize - half_window_size_isize)..(index_truncated_isize + half_window_size_isize)
         {
             let sample =
                 if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
@@ -98,82 +110,32 @@ where
             });
         }
 
-        let mut scratch = self.scratch.borrow_mut();
-        self.fft.process_with_scratch(&mut transform, &mut scratch);
-        let (dc, _) = transform[0].to_polar();
-        let mut amplitude_sum = dc;
-
-        //let index_in_window = (index - index_truncated) + ((self.window_size as f32) / 2.0);
+        let mut scratch_forward = self.scratch_forward.borrow_mut();
+        self.fft_forward
+            .process_with_scratch(&mut transform, &mut scratch_forward);
 
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
-            let freq_amplitude = freq_amplitude * 2.0;
-
-            /*
-
-                        // Algorithm to get the sample's value for this frequency
-                        // ----
-                        // Convert index to fraction through the cycle
-                        // Add phase
-                        // Get cosine
-
-                        // How to get fraction through the cycle:
-                        // Calculate the fraction of a single sample in the wavelength
-                        // Add offset from this sample
-
-                        // This can be in a lookup table for speed
-                        let fraction_of_sample_in_wavelength = 1.0 / ((self.window_size as f32) / (freq_index as f32)) * TAU;
-                        let fraction_of_index_from_center = fraction_of_sample_in_wavelength * index.fract();
-
-                        let mut phase_between_samples = phase + fraction_of_index_from_center;
-
-                        // Special case for lowest frequency because the sample at the midpoint is halfway through the cycle
-                        if freq_index == 1 {
-                            phase_between_samples += PI;
-                        }
-
-                        let freq_part = phase_between_samples.cos() * freq_amplitude;
-                        amplitude_sum += freq_part;
-            */
-
-            /*
-                        // This can be in a lookup table for speed
-                        //let mut x = (index_in_window / (self.window_size as f32 / freq_index as f32)) * TAU;
-                        let mut x = index_in_window * (TAU / (self.window_size as f32 / freq_index as f32));
-                        x += phase;
-
-                        let freq_part = x.cos() * freq_amplitude;
-                        amplitude_sum += freq_part;
-            */
-            /*
-
-            let mut x = (sample_ctr as f32 / num_samples_f32) * TAU;
-
-            // Adjust by phase
-            x += phase;
-            if x > TAU {
-                x -= TAU;
-            }
-
-            sine_wave_via_function[sample_ctr] = x.cos();
-
-            */
 
             // Fraction of tau for each sample
             // (This can be precalculated and cached)
             let phase_shift_per_sample = TAU / (self.window_size as f32 / freq_index as f32);
             let phase_adjustment = phase_shift_per_sample * index.fract();
-            let mut adjusted_phase = phase + phase_adjustment;
+            let adjusted_phase = phase + phase_adjustment;
 
-            // When the wavelength is the entire transform, it needs a PI phase shift
-            if freq_index == 1 {
-                adjusted_phase += PI;
+            transform[freq_index] = Complex32::from_polar(freq_amplitude, adjusted_phase);
+            let opposite_freq_index = self.window_size - freq_index;
+            if opposite_freq_index != freq_index {
+                transform[opposite_freq_index] =
+                    Complex32::from_polar(freq_amplitude, adjusted_phase * -1.0);
             }
-
-            let freq_part = adjusted_phase.cos() * freq_amplitude;
-            amplitude_sum += freq_part;
         }
 
-        return Ok(amplitude_sum * self.scale);
+        let mut scratch_inverse = self.scratch_inverse.borrow_mut();
+        self.fft_inverse
+            .process_with_scratch(&mut transform, &mut scratch_inverse);
+
+        let interpolated_sample = transform[half_window_size_usize].re / self.scale;
+        return Ok(interpolated_sample);
     }
 }
