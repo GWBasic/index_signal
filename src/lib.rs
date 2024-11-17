@@ -3,13 +3,19 @@ pub mod interpolator;
 #[cfg(test)]
 mod tests {
     use std::{
-        f32::consts::PI,
-        io::{Error, ErrorKind, Result},
+        cell::RefCell, f32::consts::PI, fs, io::{Error, ErrorKind, Result}, path::Path
     };
 
     use super::*;
 
     use interpolator::{Interpolator, SampleProvider};
+    use wave_stream::{
+        read_wav_from_file_path,
+        samples_by_channel::SamplesByChannel,
+        wave_header::{Channels, SampleFormat, WavHeader},
+        wave_reader::{RandomAccessOpenWavReader, RandomAccessWavReader},
+        write_wav_to_file_path,
+    };
 
     fn assert(expected: f32, actual: f32, error_message: &str) {
         // Note: 24-bit audio differentiates samples at 0.00000012 precision
@@ -506,7 +512,6 @@ mod tests {
 
     // The wavelength test must be a sin wave that fits within a frequency slot
     // 3, 5, 6, 7 won't work because they aren't an even multiple of the sampling rate
-    
 
     #[test]
     fn wavelength_2_sample() {
@@ -521,5 +526,67 @@ mod tests {
     #[test]
     fn wavelength_8_sample() {
         test_wavelength(8.0);
+    }
+
+    struct RandomAccessWavReaderSampleProvider {
+        random_access_wav_reader: RefCell<RandomAccessWavReader<f32>>,
+    }
+
+    impl SampleProvider<&str, Error> for RandomAccessWavReaderSampleProvider {
+        fn get_sample(&self, _channel_id: &str, index: usize) -> std::result::Result<f32, Error> {
+            let mut random_access_wav_reader = self.random_access_wav_reader.borrow_mut();
+            let read_sample_result = random_access_wav_reader.read_sample(index);
+            let samples_by_channel = read_sample_result?;
+            let sample = samples_by_channel.front_left.expect("Can't read the sample");
+            Ok(sample)
+        }
+    }
+
+    #[test]
+    fn wave_stream_supported() {
+        let header = WavHeader {
+            sample_format: SampleFormat::Float,
+            channels: Channels::new().front_left(),
+            sample_rate: 44100,
+        };
+
+        let samples = vec![
+            0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
+            0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0,
+        ];
+
+        {
+            let open_wav_writer = write_wav_to_file_path(Path::new("delete_me.wav"), header).unwrap();
+
+            let mut random_access_wave_writer = open_wav_writer.get_random_access_f32_writer().unwrap();
+
+            for sample_ctr in 0..samples.len() {
+                random_access_wave_writer
+                    .write_samples(
+                        sample_ctr,
+                        SamplesByChannel::new().front_left(samples[sample_ctr]),
+                    )
+                    .unwrap()
+            }
+        }
+
+        let open_wav_reader = read_wav_from_file_path(Path::new("delete_me.wav")).unwrap();
+        let random_access_wav_reader_sample_provider = RandomAccessWavReaderSampleProvider {
+            random_access_wav_reader: RefCell::new(open_wav_reader.get_random_access_f32_reader().unwrap()),
+        };
+
+        let interpolator = Interpolator::new(
+            4,
+            samples.len(),
+            random_access_wav_reader_sample_provider,
+        );
+
+        for sample_ctr in 0..samples.len() {
+            let expected_sample = samples[sample_ctr];
+            let actual_sample = interpolator.get_interpolated_sample("", sample_ctr as f32).unwrap();
+            assert_eq!(expected_sample, actual_sample, "Wrong sample when reading from a wav file");
+        }
+
+        fs::remove_file(Path::new("delete_me.wav")).unwrap();
     }
 }
