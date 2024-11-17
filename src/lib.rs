@@ -176,7 +176,7 @@ mod tests {
         interpolator: &Interpolator<TSampleProvider, TChannelId, Error>,
     ) where
         TSampleProvider: SampleProvider<TChannelId, Error>,
-        TChannelId: Copy,
+        TChannelId: Copy + std::cmp::Eq + std::hash::Hash,
     {
         let incr = (end - start) / (NUM_SAMPLES_IN_OUTPUT as f32);
 
