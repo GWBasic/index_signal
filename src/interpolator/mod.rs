@@ -1,4 +1,4 @@
-use std::{cell::RefCell, marker::PhantomData, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, marker::PhantomData, sync::Arc};
 
 use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
@@ -11,10 +11,15 @@ where
     fn get_sample(&self, channel_id: TChannelId, index: usize) -> Result<f32, TError>;
 }
 
+struct TransformCacheEntry {
+    index: usize,
+    transform: Vec<Complex32>,
+}
+
 pub struct Interpolator<TSampleProvider, TChannelId, TError>
 where
     TSampleProvider: SampleProvider<TChannelId, TError>,
-    TChannelId: Copy,
+    TChannelId: Copy + std::cmp::Eq + std::hash::Hash,
 {
     fft_forward: Arc<dyn Fft<f32>>,
     scratch_forward: RefCell<Vec<Complex32>>,
@@ -25,6 +30,7 @@ where
     scale: f32,
     num_samples: usize,
     phase_shifts_per_sample: Vec<f32>,
+    transform_cache: RefCell<HashMap<TChannelId, TransformCacheEntry>>,
 
     _phantom_data: PhantomData<(TChannelId, TError)>,
 }
@@ -32,7 +38,7 @@ where
 impl<TSampleProvider, TChannelId, TError> Interpolator<TSampleProvider, TChannelId, TError>
 where
     TSampleProvider: SampleProvider<TChannelId, TError>,
-    TChannelId: Copy,
+    TChannelId: Copy + std::cmp::Eq + std::hash::Hash,
 {
     pub fn new(
         window_size: usize,
@@ -79,6 +85,7 @@ where
             scale: scale_transform[0].re,
             num_samples,
             phase_shifts_per_sample,
+            transform_cache: RefCell::new(HashMap::new()),
             _phantom_data: PhantomData,
         }
     }
@@ -96,35 +103,24 @@ where
         }
 
         let index_truncated_isize = index_truncated as isize;
-
-        // TODO: Cache the transform
-
-        let mut transform = Vec::with_capacity(self.window_size);
-
-        // TODO: Cache half window size
         let half_window_size_usize = self.window_size / 2;
         let half_window_size_isize = half_window_size_usize as isize;
 
-        for window_sample_index in (index_truncated_isize - half_window_size_isize)
-            ..(index_truncated_isize + half_window_size_isize)
-        {
-            let sample =
-                if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
-                    self.sample_provider
-                        .get_sample(channel_id, window_sample_index as usize)?
+        let mut transform = {
+            let mut transform_cache = self.transform_cache.borrow_mut();
+
+            // Check cache first
+            if let Some(cache_entry) = transform_cache.get(&channel_id) {
+                if cache_entry.index == index_truncated as usize {
+                    cache_entry.transform.clone()
                 } else {
-                    0.0
-                };
-
-            transform.push(Complex32 {
-                re: sample,
-                im: 0.0,
-            });
-        }
-
-        let mut scratch_forward = self.scratch_forward.borrow_mut();
-        self.fft_forward
-            .process_with_scratch(&mut transform, &mut scratch_forward);
+                    // Index doesn't match, need to compute new transform
+                    self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
+                }
+            } else {
+                self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
+            }
+        };
 
         for freq_index in 1..=(self.window_size / 2) {
             let (freq_amplitude, phase) = transform[freq_index].to_polar();
@@ -147,6 +143,49 @@ where
             .process_with_scratch(&mut transform, &mut scratch_inverse);
 
         let interpolated_sample = transform[half_window_size_usize].re / self.scale;
-        return Ok(interpolated_sample);
+        Ok(interpolated_sample)
+    }
+
+    // Helper function to compute and cache transform
+    fn compute_transform(
+        &self,
+        transform_cache: &mut HashMap<TChannelId, TransformCacheEntry>,
+        channel_id: TChannelId,
+        index_truncated_isize: isize,
+        half_window_size_isize: isize,
+    ) -> Result<Vec<Complex32>, TError> {
+        let mut new_transform = Vec::with_capacity(self.window_size);
+
+        for window_sample_index in (index_truncated_isize - half_window_size_isize)
+            ..(index_truncated_isize + half_window_size_isize)
+        {
+            let sample =
+                if window_sample_index >= 0 && window_sample_index < self.num_samples as isize {
+                    self.sample_provider
+                        .get_sample(channel_id, window_sample_index as usize)?
+                } else {
+                    0.0
+                };
+
+            new_transform.push(Complex32 {
+                re: sample,
+                im: 0.0,
+            });
+        }
+
+        let mut scratch_forward = self.scratch_forward.borrow_mut();
+        self.fft_forward
+            .process_with_scratch(&mut new_transform, &mut scratch_forward);
+
+        // Store in cache
+        transform_cache.insert(
+            channel_id,
+            TransformCacheEntry {
+                index: index_truncated_isize as usize,
+                transform: new_transform.clone(),
+            },
+        );
+
+        Ok(new_transform)
     }
 }
