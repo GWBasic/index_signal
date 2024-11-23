@@ -10,6 +10,7 @@
 			"fract",
 			"inplace",
 			"Nyquist",
+			"oversample",
 			"rustfft",
 			"trunc",
 			"ulps"
