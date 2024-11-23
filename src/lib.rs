@@ -53,19 +53,19 @@ mod tests {
 
         assert_eq!(
             1.0,
-            interpolator.get_interpolated_sample("test", 0.0).unwrap()
+            interpolator.get_interpolated_sample("test", 0.0, 0.0).unwrap()
         );
         assert_eq!(
             -1.0,
-            interpolator.get_interpolated_sample("test", 1.0).unwrap()
+            interpolator.get_interpolated_sample("test", 1.0, 0.0).unwrap()
         );
         assert_eq!(
             1.0,
-            interpolator.get_interpolated_sample("test", 2.0).unwrap()
+            interpolator.get_interpolated_sample("test", 2.0, 0.0).unwrap()
         );
         assert_eq!(
             -1.0,
-            interpolator.get_interpolated_sample("test", 3.0).unwrap()
+            interpolator.get_interpolated_sample("test", 3.0, 0.0).unwrap()
         );
     }
 
@@ -75,22 +75,22 @@ mod tests {
 
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 100.5).unwrap(),
+            interpolator.get_interpolated_sample("test", 100.5, 0.0).unwrap(),
             "Wrong value for 100.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 101.5).unwrap(),
+            interpolator.get_interpolated_sample("test", 101.5, 0.0).unwrap(),
             "Wrong value for 101.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 102.5).unwrap(),
+            interpolator.get_interpolated_sample("test", 102.5, 0.0).unwrap(),
             "Wrong value for 102.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 103.5).unwrap(),
+            interpolator.get_interpolated_sample("test", 103.5, 0.0).unwrap(),
             "Wrong value for 103.5",
         );
     }
@@ -112,7 +112,7 @@ mod tests {
 
         assert_eq!(
             0.75,
-            interpolator.get_interpolated_sample("dc", 100.5).unwrap()
+            interpolator.get_interpolated_sample("dc", 100.5, 0.0).unwrap()
         );
     }
 
@@ -136,27 +136,27 @@ mod tests {
 
         assert_eq!(
             0.0,
-            interpolator.get_interpolated_sample("test", 0.0).unwrap()
+            interpolator.get_interpolated_sample("test", 0.0, 0.0).unwrap()
         );
 
         assert_eq!(
             ErrorKind::BrokenPipe,
             interpolator
-                .get_interpolated_sample("test", 3.0)
+                .get_interpolated_sample("test", 3.0, 0.0)
                 .unwrap_err()
                 .kind()
         );
         assert_eq!(
             ErrorKind::BrokenPipe,
             interpolator
-                .get_interpolated_sample("test", 2.1)
+                .get_interpolated_sample("test", 2.1, 0.0)
                 .unwrap_err()
                 .kind()
         );
         assert_eq!(
             ErrorKind::BrokenPipe,
             interpolator
-                .get_interpolated_sample("test", 3.1)
+                .get_interpolated_sample("test", 3.1, 0.0)
                 .unwrap_err()
                 .kind()
         );
@@ -273,7 +273,7 @@ mod tests {
             });
 
             let interpolator_sample = interpolator
-                .get_interpolated_sample(channel_id, index)
+                .get_interpolated_sample(channel_id, index, 0.0)
                 .unwrap();
             interpolator_0.push_str(if interpolator_sample < -0.8 { "*" } else { " " });
             interpolator_1.push_str(
@@ -396,7 +396,7 @@ mod tests {
         );
 
         let expected = get_four_sample_wavelength_sample(10.2);
-        let actual = interpolator.get_interpolated_sample("test", 10.2).unwrap();
+        let actual = interpolator.get_interpolated_sample("test", 10.2, 0.0).unwrap();
 
         assert(expected, actual, "Wrong value for a four-sample window");
     }
@@ -437,7 +437,7 @@ mod tests {
         let mut x = 500.0;
         while x <= 1500.0 {
             let expected_sample = get_signal_sample(x);
-            let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
+            let actual_sample = interpolator.get_interpolated_sample("test", x, 0.0).unwrap();
 
             assert(
                 expected_sample,
@@ -498,7 +498,7 @@ mod tests {
         let mut x = 500.0;
         while x <= 1500.0 {
             let expected_sample = sine_signal_provider.get_sine_signal_sample(x);
-            let actual_sample = interpolator.get_interpolated_sample("test", x).unwrap();
+            let actual_sample = interpolator.get_interpolated_sample("test", x, 0.0).unwrap();
 
             assert(
                 expected_sample,
@@ -583,7 +583,7 @@ mod tests {
 
         for sample_ctr in 0..samples.len() {
             let expected_sample = samples[sample_ctr];
-            let actual_sample = interpolator.get_interpolated_sample("", sample_ctr as f32).unwrap();
+            let actual_sample = interpolator.get_interpolated_sample("", sample_ctr as f32, 0.0).unwrap();
             assert_eq!(expected_sample, actual_sample, "Wrong sample when reading from a wav file");
         }
 

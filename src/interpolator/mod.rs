@@ -94,6 +94,15 @@ where
         &self,
         channel_id: TChannelId,
         index: f32,
+        _relative_speed: f32,
+    ) -> Result<f32, TError> {
+        self.get_interpolated_sample_no_aliasing_filter(channel_id, index)
+    }
+
+    fn get_interpolated_sample_no_aliasing_filter(
+        &self,
+        channel_id: TChannelId,
+        index: f32,
     ) -> Result<f32, TError> {
         let index_truncated = index.trunc();
         if index == index_truncated {
@@ -115,10 +124,20 @@ where
                     cache_entry.transform.clone()
                 } else {
                     // Index doesn't match, need to compute new transform
-                    self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
+                    self.compute_transform(
+                        &mut transform_cache,
+                        channel_id,
+                        index_truncated_isize,
+                        half_window_size_isize,
+                    )?
                 }
             } else {
-                self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
+                self.compute_transform(
+                    &mut transform_cache,
+                    channel_id,
+                    index_truncated_isize,
+                    half_window_size_isize,
+                )?
             }
         };
 
