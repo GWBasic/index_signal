@@ -106,18 +106,20 @@ where
         let half_window_size_usize = self.window_size / 2;
         let half_window_size_isize = half_window_size_usize as isize;
 
-        // Check cache first
-        let transform_cache = self.transform_cache.borrow();
-        let mut transform = if let Some(cache_entry) = transform_cache.get(&channel_id) {
-            if cache_entry.index == index_truncated as usize {
-                cache_entry.transform.clone()
+        let mut transform = {
+            let mut transform_cache = self.transform_cache.borrow_mut();
+
+            // Check cache first
+            if let Some(cache_entry) = transform_cache.get(&channel_id) {
+                if cache_entry.index == index_truncated as usize {
+                    cache_entry.transform.clone()
+                } else {
+                    // Index doesn't match, need to compute new transform
+                    self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
+                }
             } else {
-                // Index doesn't match, need to compute new transform
-                self.compute_transform(channel_id, index_truncated_isize, half_window_size_isize)?
+                self.compute_transform(&mut transform_cache, channel_id, index_truncated_isize, half_window_size_isize)?
             }
-        } else {
-            // Not in cache, compute new transform
-            self.compute_transform(channel_id, index_truncated_isize, half_window_size_isize)?
         };
 
         for freq_index in 1..=(self.window_size / 2) {
@@ -147,6 +149,7 @@ where
     // Helper function to compute and cache transform
     fn compute_transform(
         &self,
+        transform_cache: &mut HashMap<TChannelId, TransformCacheEntry>,
         channel_id: TChannelId,
         index_truncated_isize: isize,
         half_window_size_isize: isize,
@@ -175,7 +178,7 @@ where
             .process_with_scratch(&mut new_transform, &mut scratch_forward);
 
         // Store in cache
-        self.transform_cache.borrow_mut().insert(
+        transform_cache.insert(
             channel_id,
             TransformCacheEntry {
                 index: index_truncated_isize as usize,
