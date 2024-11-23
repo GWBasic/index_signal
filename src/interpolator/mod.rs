@@ -31,6 +31,7 @@ where
     num_samples: usize,
     phase_shifts_per_sample: Vec<f32>,
     transform_cache: RefCell<HashMap<TChannelId, TransformCacheEntry>>,
+    antialiasing_scale_cache: RefCell<HashMap<TChannelId, f32>>,
 
     _phantom_data: PhantomData<(TChannelId, TError)>,
 }
@@ -86,6 +87,7 @@ where
             num_samples,
             phase_shifts_per_sample,
             transform_cache: RefCell::new(HashMap::new()),
+            antialiasing_scale_cache: RefCell::new(HashMap::new()),
             _phantom_data: PhantomData,
         }
     }
@@ -234,14 +236,32 @@ where
 
         for i in 0..oversampling_ratio {
             let sample_index = start_index + (i as f32 * oversample_rate);
-            let sample = self.get_interpolated_sample_no_aliasing_filter(channel_id, sample_index)?;
-            transform.push(Complex32 { re: sample, im: 0.0 });
+            let sample =
+                self.get_interpolated_sample_no_aliasing_filter(channel_id, sample_index)?;
+            transform.push(Complex32 {
+                re: sample,
+                im: 0.0,
+            });
         }
 
         self.fft_forward.process(&mut transform);
 
         let (unscaled_sample, _) = transform[0].to_polar();
-        // TODO: Scale
-        Ok(unscaled_sample)
+        let sample = unscaled_sample / self.get_scale(oversampling_ratio);
+        Ok(sample)
+    }
+
+    fn get_scale(&self, window_size: usize) -> f32 {
+        let mut scale_cache = self.antialiasing_scale_cache.borrow_mut();
+        if let Some(scale) = scale_cache.get(&window_size) {
+            return scale;
+        }
+
+        // Calculate scale: Transform a DC signal of 1.0 to determine scale
+        let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
+        self.fft_forward.process(&mut scale_transform);
+        let (scale, _) = scale_transform[0].to_polar();
+        scale_cache.insert(window_size, scale);
+        scale
     }
 }
