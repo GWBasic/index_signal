@@ -38,7 +38,7 @@ where
     phase_shifts_per_sample: Vec<f32>,
     transform_cache: RefCell<HashMap<TChannelId, TransformCacheEntry>>,
 
-    _phantom_data: PhantomData<(TChannelId, TError)>,
+    _phantom_data: PhantomData<TError>,
 }
 
 impl<TSampleProvider, TChannelId, TError> Interpolator<TSampleProvider, TChannelId, TError>
