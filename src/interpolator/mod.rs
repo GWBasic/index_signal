@@ -101,7 +101,7 @@ where
         // Calculate scale: Transform a DC signal of 1.0 back and forth to determine scale
         let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
         fft_forward.process_with_scratch(&mut scale_transform, &mut scratch_forward);
-        let forward_scale = scale_transform[0].re;
+        let (forward_scale, _) = scale_transform[0].to_polar();
 
         fft_inverse.process_with_scratch(&mut scale_transform, &mut scratch_inverse);
         let inverse_scale = scale_transform[0].re;

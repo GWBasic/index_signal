@@ -3,7 +3,11 @@ pub mod interpolator;
 #[cfg(test)]
 mod tests {
     use std::{
-        cell::RefCell, f32::consts::PI, fs, io::{Error, ErrorKind, Result}, path::Path
+        cell::RefCell,
+        f32::consts::PI,
+        fs,
+        io::{Error, ErrorKind, Result},
+        path::Path,
     };
 
     use super::*;
@@ -53,19 +57,27 @@ mod tests {
 
         assert_eq!(
             1.0,
-            interpolator.get_interpolated_sample("test", 0.0, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("test", 0.0, 0.0)
+                .unwrap()
         );
         assert_eq!(
             -1.0,
-            interpolator.get_interpolated_sample("test", 1.0, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("test", 1.0, 0.0)
+                .unwrap()
         );
         assert_eq!(
             1.0,
-            interpolator.get_interpolated_sample("test", 2.0, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("test", 2.0, 0.0)
+                .unwrap()
         );
         assert_eq!(
             -1.0,
-            interpolator.get_interpolated_sample("test", 3.0, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("test", 3.0, 0.0)
+                .unwrap()
         );
     }
 
@@ -75,22 +87,30 @@ mod tests {
 
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 100.5, 0.0).unwrap(),
+            interpolator
+                .get_interpolated_sample("test", 100.5, 0.0)
+                .unwrap(),
             "Wrong value for 100.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 101.5, 0.0).unwrap(),
+            interpolator
+                .get_interpolated_sample("test", 101.5, 0.0)
+                .unwrap(),
             "Wrong value for 101.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 102.5, 0.0).unwrap(),
+            interpolator
+                .get_interpolated_sample("test", 102.5, 0.0)
+                .unwrap(),
             "Wrong value for 102.5",
         );
         assert(
             0.0,
-            interpolator.get_interpolated_sample("test", 103.5, 0.0).unwrap(),
+            interpolator
+                .get_interpolated_sample("test", 103.5, 0.0)
+                .unwrap(),
             "Wrong value for 103.5",
         );
     }
@@ -112,7 +132,9 @@ mod tests {
 
         assert_eq!(
             0.75,
-            interpolator.get_interpolated_sample("dc", 100.5, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("dc", 100.5, 0.0)
+                .unwrap()
         );
     }
 
@@ -136,7 +158,9 @@ mod tests {
 
         assert_eq!(
             0.0,
-            interpolator.get_interpolated_sample("test", 0.0, 0.0).unwrap()
+            interpolator
+                .get_interpolated_sample("test", 0.0, 0.0)
+                .unwrap()
         );
 
         assert_eq!(
@@ -396,7 +420,9 @@ mod tests {
         );
 
         let expected = get_four_sample_wavelength_sample(10.2);
-        let actual = interpolator.get_interpolated_sample("test", 10.2, 0.0).unwrap();
+        let actual = interpolator
+            .get_interpolated_sample("test", 10.2, 0.0)
+            .unwrap();
 
         assert(expected, actual, "Wrong value for a four-sample window");
     }
@@ -437,14 +463,15 @@ mod tests {
         let mut x = 500.0;
         while x <= 1500.0 {
             let expected_sample = get_signal_sample(x);
-            let actual_sample = interpolator.get_interpolated_sample("test", x, 0.0).unwrap();
+            let actual_sample = interpolator
+                .get_interpolated_sample("test", x, 0.0)
+                .unwrap();
 
             assert(
                 expected_sample,
                 actual_sample,
                 &format!("When reading from a continuous sample at index {}", x),
             );
-            //println!("Expected: {}, Actual: {} ({})", expected_sample, actual_sample, x);
 
             x += 0.01;
         }
@@ -498,7 +525,9 @@ mod tests {
         let mut x = 500.0;
         while x <= 1500.0 {
             let expected_sample = sine_signal_provider.get_sine_signal_sample(x);
-            let actual_sample = interpolator.get_interpolated_sample("test", x, 0.0).unwrap();
+            let actual_sample = interpolator
+                .get_interpolated_sample("test", x, 0.0)
+                .unwrap();
 
             assert(
                 expected_sample,
@@ -537,7 +566,9 @@ mod tests {
             let mut random_access_wav_reader = self.random_access_wav_reader.borrow_mut();
             let read_sample_result = random_access_wav_reader.read_sample(index);
             let samples_by_channel = read_sample_result?;
-            let sample = samples_by_channel.front_left.expect("Can't read the sample");
+            let sample = samples_by_channel
+                .front_left
+                .expect("Can't read the sample");
             Ok(sample)
         }
     }
@@ -556,9 +587,11 @@ mod tests {
         ];
 
         {
-            let open_wav_writer = write_wav_to_file_path(Path::new("delete_me.wav"), header).unwrap();
+            let open_wav_writer =
+                write_wav_to_file_path(Path::new("delete_me.wav"), header).unwrap();
 
-            let mut random_access_wave_writer = open_wav_writer.get_random_access_f32_writer().unwrap();
+            let mut random_access_wave_writer =
+                open_wav_writer.get_random_access_f32_writer().unwrap();
 
             for sample_ctr in 0..samples.len() {
                 random_access_wave_writer
@@ -572,19 +605,23 @@ mod tests {
 
         let open_wav_reader = read_wav_from_file_path(Path::new("delete_me.wav")).unwrap();
         let random_access_wav_reader_sample_provider = RandomAccessWavReaderSampleProvider {
-            random_access_wav_reader: RefCell::new(open_wav_reader.get_random_access_f32_reader().unwrap()),
+            random_access_wav_reader: RefCell::new(
+                open_wav_reader.get_random_access_f32_reader().unwrap(),
+            ),
         };
 
-        let interpolator = Interpolator::new(
-            4,
-            samples.len(),
-            random_access_wav_reader_sample_provider,
-        );
+        let interpolator =
+            Interpolator::new(4, samples.len(), random_access_wav_reader_sample_provider);
 
         for sample_ctr in 0..samples.len() {
             let expected_sample = samples[sample_ctr];
-            let actual_sample = interpolator.get_interpolated_sample("", sample_ctr as f32, 0.0).unwrap();
-            assert_eq!(expected_sample, actual_sample, "Wrong sample when reading from a wav file");
+            let actual_sample = interpolator
+                .get_interpolated_sample("", sample_ctr as f32, 0.0)
+                .unwrap();
+            assert_eq!(
+                expected_sample, actual_sample,
+                "Wrong sample when reading from a wav file"
+            );
         }
 
         fs::remove_file(Path::new("delete_me.wav")).unwrap();
@@ -592,18 +629,64 @@ mod tests {
 
     #[test]
     fn aliasing_filter_removes_high_frequencies() {
-        let sample_provider = NyquistSampleProvider { };
-        
-        let interpolator = Interpolator::new(
-            10,
-            8000,
-            sample_provider,
-        );
+        let sample_provider = NyquistSampleProvider {};
+
+        let interpolator = Interpolator::new(10, 8000, sample_provider);
 
         // Test with relative_speed > 1 which should trigger anti-aliasing filter
         for sample_ctr in 200..300 {
-            let actual_sample = interpolator.get_interpolated_sample("test", sample_ctr as f32, 2.0).unwrap();
-            assert!(actual_sample.abs() < 1e-6, "Sample should be approximately 0 due to anti-aliasing filter");
+            let actual_sample = interpolator
+                .get_interpolated_sample("test", sample_ctr as f32, 2.0)
+                .unwrap();
+            assert!(
+                actual_sample.abs() < 1e-6,
+                "Sample should be approximately 0 due to anti-aliasing filter"
+            );
+        }
+    }
+
+    struct NyquistAndLowerHarmonicSampleProvider {}
+
+    impl SampleProvider<&str, Error> for NyquistAndLowerHarmonicSampleProvider {
+        fn get_sample(&self, channel_id: &str, index: usize) -> Result<f32> {
+            assert!(channel_id.eq("test"));
+
+            let mut sample = 0.0;
+
+            if index % 2 == 0 {
+                sample += 0.5;
+            } else {
+                sample -= 0.5;
+            }
+
+            match index % 4 {
+                0 => sample += 0.5,
+                1 => {},
+                2 => sample -= 0.5,
+                3 => {},
+                _ => return Err(Error::new(ErrorKind::InvalidInput, "Unexpected input"))
+            }
+
+            Ok(sample)
+        }
+    }
+
+    #[test]
+    fn antialiasing_filter_keeps_lower_frequency() {
+        let sample_provider = NyquistAndLowerHarmonicSampleProvider {};
+
+        let interpolator = Interpolator::new(10, 8000, sample_provider);
+
+        // Test with relative_speed > 1 which should trigger anti-aliasing filter
+        for sample_ctr in 200..300 {
+            let actual_sample = interpolator
+                .get_interpolated_sample("test", sample_ctr as f32, 2.0)
+                .unwrap();
+            assert(
+                if sample_ctr % 2 == 0 { 0.5 } else { -0.5 },
+                actual_sample,
+                &format!("When reading from a continuous sample at index {}", sample_ctr),
+            );
         }
     }
 }
