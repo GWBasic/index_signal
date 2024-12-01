@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc, sync::Arc};
 
-use rustfft::{num_complex::Complex32, num_traits::Pow, Fft, FftPlanner};
+use rustfft::{num_complex::Complex32, Fft, FftPlanner};
 
 pub type GetSampleClosure = dyn Fn(usize) -> f32;
 
@@ -16,22 +16,27 @@ struct TransformCacheEntry {
     transform: Vec<Complex32>,
 }
 
+struct FFTCacheEntry {
+    pub fft_forward: Arc<dyn Fft<f32>>,
+    pub scratch_forward: RefCell<Vec<Complex32>>,
+    pub forward_scale: f32,
+    pub fft_inverse: Arc<dyn Fft<f32>>,
+    pub scratch_inverse: RefCell<Vec<Complex32>>,
+    pub inverse_scale: f32,
+}
+
 pub struct Interpolator<TSampleProvider, TChannelId, TError>
 where
     TSampleProvider: SampleProvider<TChannelId, TError>,
     TChannelId: Copy + std::cmp::Eq + std::hash::Hash,
 {
-    fft_forward: Arc<dyn Fft<f32>>,
-    scratch_forward: RefCell<Vec<Complex32>>,
-    fft_inverse: Arc<dyn Fft<f32>>,
-    scratch_inverse: RefCell<Vec<Complex32>>,
+    planner: RefCell<FftPlanner<f32>>,
+    fft_cache: RefCell<HashMap<usize, Rc<FFTCacheEntry>>>,
     sample_provider: TSampleProvider,
     window_size: usize,
-    scale: f32,
     num_samples: usize,
     phase_shifts_per_sample: Vec<f32>,
     transform_cache: RefCell<HashMap<TChannelId, TransformCacheEntry>>,
-    antialiasing_scale_cache: RefCell<HashMap<TChannelId, f32>>,
 
     _phantom_data: PhantomData<(TChannelId, TError)>,
 }
@@ -47,6 +52,43 @@ where
         sample_provider: TSampleProvider,
     ) -> Interpolator<TSampleProvider, TChannelId, TError> {
         let mut planner = FftPlanner::new();
+        let fft_cache_entry = Self::construct_fft_cache_entry(&mut planner, window_size);
+
+        // Calculate phase shifts per sample: Transform sine waves of 1.0, shift by one sample, transform back
+        let mut phase_transform = vec![Complex32::from_polar(1.0, 0.0); window_size];
+        phase_transform[0] = Complex32::from_polar(0.0, 0.0);
+        fft_cache_entry
+            .fft_inverse
+            .process_with_scratch(&mut phase_transform, &mut fft_cache_entry.scratch_inverse.borrow_mut());
+
+        let first_sample = phase_transform.remove(0);
+        phase_transform.push(first_sample);
+        fft_cache_entry
+            .fft_forward
+            .process_with_scratch(&mut phase_transform, &mut fft_cache_entry.scratch_forward.borrow_mut());
+
+        let mut phase_shifts_per_sample = Vec::with_capacity(window_size / 2);
+        for freq_index in 0..=(window_size / 2) {
+            let (_, phase_shift_for_frequency) = phase_transform[freq_index].to_polar();
+            phase_shifts_per_sample.push(phase_shift_for_frequency);
+        }
+
+        let fft_cache = RefCell::new(HashMap::new());
+        fft_cache.borrow_mut().insert(window_size, Rc::new(fft_cache_entry));
+
+        Interpolator {
+            planner: RefCell::new(planner),
+            fft_cache,
+            sample_provider,
+            window_size,
+            num_samples,
+            phase_shifts_per_sample,
+            transform_cache: RefCell::new(HashMap::new()),
+            _phantom_data: PhantomData,
+        }
+    }
+
+    fn construct_fft_cache_entry(planner: &mut FftPlanner<f32>, window_size: usize) -> FFTCacheEntry {
 
         let fft_forward = planner.plan_fft_forward(window_size);
         let scratch_forward_length = fft_forward.get_inplace_scratch_len();
@@ -59,37 +101,31 @@ where
         // Calculate scale: Transform a DC signal of 1.0 back and forth to determine scale
         let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
         fft_forward.process_with_scratch(&mut scale_transform, &mut scratch_forward);
+        let forward_scale = scale_transform[0].re;
+
         fft_inverse.process_with_scratch(&mut scale_transform, &mut scratch_inverse);
+        let inverse_scale = scale_transform[0].re;
 
-        // Calculate phase shifts per sample: Transform sine waves of 1.0, shift by one sample, transform back
-        let mut phase_transform = vec![Complex32::from_polar(1.0, 0.0); window_size];
-        phase_transform[0] = Complex32::from_polar(0.0, 0.0);
-        fft_inverse.process_with_scratch(&mut phase_transform, &mut scratch_inverse);
-
-        let first_sample = phase_transform.remove(0);
-        phase_transform.push(first_sample);
-        fft_forward.process_with_scratch(&mut phase_transform, &mut scratch_forward);
-
-        let mut phase_shifts_per_sample = Vec::with_capacity(window_size / 2);
-        for freq_index in 0..=(window_size / 2) {
-            let (_, phase_shift_for_frequency) = phase_transform[freq_index].to_polar();
-            phase_shifts_per_sample.push(phase_shift_for_frequency);
-        }
-
-        Interpolator {
+        FFTCacheEntry {
             fft_forward,
             scratch_forward: RefCell::new(scratch_forward),
+            forward_scale,
             fft_inverse,
             scratch_inverse: RefCell::new(scratch_inverse),
-            sample_provider,
-            window_size,
-            scale: scale_transform[0].re,
-            num_samples,
-            phase_shifts_per_sample,
-            transform_cache: RefCell::new(HashMap::new()),
-            antialiasing_scale_cache: RefCell::new(HashMap::new()),
-            _phantom_data: PhantomData,
+            inverse_scale,
         }
+    }
+
+    fn get_fft_cache_entry(&self, window_size: usize) -> Rc<FFTCacheEntry> {
+        let mut fft_cache = self.fft_cache.borrow_mut();
+        if let Some(cache_entry) = fft_cache.get(&window_size) {
+            return cache_entry.clone();
+        }
+
+        let fft_cache_entry = Self::construct_fft_cache_entry(&mut self.planner.borrow_mut(), window_size);
+        let fft_cache_entry = Rc::new(fft_cache_entry);
+        fft_cache.insert(window_size, fft_cache_entry.clone());
+        fft_cache_entry
     }
 
     pub fn get_interpolated_sample(
@@ -163,11 +199,12 @@ where
             }
         }
 
-        let mut scratch_inverse = self.scratch_inverse.borrow_mut();
-        self.fft_inverse
+        let fft_cache_entry = self.get_fft_cache_entry(self.window_size);
+        let mut scratch_inverse = fft_cache_entry.scratch_inverse.borrow_mut();
+        fft_cache_entry.fft_inverse
             .process_with_scratch(&mut transform, &mut scratch_inverse);
 
-        let interpolated_sample = transform[half_window_size_usize].re / self.scale;
+        let interpolated_sample = transform[half_window_size_usize].re / fft_cache_entry.inverse_scale;
         Ok(interpolated_sample)
     }
 
@@ -198,8 +235,9 @@ where
             });
         }
 
-        let mut scratch_forward = self.scratch_forward.borrow_mut();
-        self.fft_forward
+        let fft_cache_entry = self.get_fft_cache_entry(self.window_size);
+        let mut scratch_forward = fft_cache_entry.scratch_forward.borrow_mut();
+        fft_cache_entry.fft_forward
             .process_with_scratch(&mut new_transform, &mut scratch_forward);
 
         // Store in cache
@@ -244,24 +282,11 @@ where
             });
         }
 
-        self.fft_forward.process(&mut transform);
+        let fft_cache_entry = self.get_fft_cache_entry(oversampling_ratio);
+        fft_cache_entry.fft_forward.process_with_scratch(&mut transform, &mut fft_cache_entry.scratch_forward.borrow_mut());
 
         let (unscaled_sample, _) = transform[0].to_polar();
-        let sample = unscaled_sample / self.get_scale(oversampling_ratio);
+        let sample = unscaled_sample / fft_cache_entry.forward_scale;
         Ok(sample)
-    }
-
-    fn get_scale(&self, window_size: usize) -> f32 {
-        let mut scale_cache = self.antialiasing_scale_cache.borrow_mut();
-        if let Some(scale) = scale_cache.get(&window_size) {
-            return scale;
-        }
-
-        // Calculate scale: Transform a DC signal of 1.0 to determine scale
-        let mut scale_transform = vec![Complex32::new(1.0, 0.0); window_size];
-        self.fft_forward.process(&mut scale_transform);
-        let (scale, _) = scale_transform[0].to_polar();
-        scale_cache.insert(window_size, scale);
-        scale
     }
 }

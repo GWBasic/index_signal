@@ -589,4 +589,21 @@ mod tests {
 
         fs::remove_file(Path::new("delete_me.wav")).unwrap();
     }
+
+    #[test]
+    fn aliasing_filter_removes_high_frequencies() {
+        let sample_provider = NyquistSampleProvider { };
+        
+        let interpolator = Interpolator::new(
+            10,
+            8000,
+            sample_provider,
+        );
+
+        // Test with relative_speed > 1 which should trigger anti-aliasing filter
+        for sample_ctr in 200..300 {
+            let actual_sample = interpolator.get_interpolated_sample("test", sample_ctr as f32, 2.0).unwrap();
+            assert!(actual_sample.abs() < 1e-6, "Sample should be approximately 0 due to anti-aliasing filter");
+        }
+    }
 }
