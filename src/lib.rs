@@ -197,6 +197,7 @@ mod tests {
         end: f32,
         channel_id: TChannelId,
         sample_provider: Box<dyn FloatIndexSampleProvider>,
+        relative_speed: f32,
         interpolator: &Interpolator<TSampleProvider, TChannelId, Error>,
     ) where
         TSampleProvider: SampleProvider<TChannelId, Error>,
@@ -214,17 +215,6 @@ mod tests {
         let mut sample_provider_7 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
         let mut sample_provider_8 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
         let mut sample_provider_9 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-
-        let mut interpolator_0 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_1 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_2 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_3 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_4 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_5 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_6 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_7 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_8 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
-        let mut interpolator_9 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
 
         let mut index = start;
         while {
@@ -295,9 +285,57 @@ mod tests {
             } else {
                 " "
             });
+            index += incr;
+            index < end
+        } {}
 
+        let bar = "-".repeat(NUM_SAMPLES_IN_OUTPUT);
+
+        println!("Expected");
+        println!("{}", bar);
+        println!("{}", sample_provider_0);
+        println!("{}", sample_provider_1);
+        println!("{}", sample_provider_2);
+        println!("{}", sample_provider_3);
+        println!("{}", sample_provider_4);
+        println!("{}", sample_provider_5);
+        println!("{}", sample_provider_6);
+        println!("{}", sample_provider_7);
+        println!("{}", sample_provider_8);
+        println!("{}", sample_provider_9);
+        println!("{}", bar);
+        println!();
+
+        print_actual_waveform(start, end, channel_id, relative_speed, interpolator);
+    }
+
+    fn print_actual_waveform<TSampleProvider, TChannelId>(
+        start: f32,
+        end: f32,
+        channel_id: TChannelId,
+        relative_speed: f32,
+        interpolator: &Interpolator<TSampleProvider, TChannelId, Error>,
+    ) where
+        TSampleProvider: SampleProvider<TChannelId, Error>,
+        TChannelId: Copy + std::cmp::Eq + std::hash::Hash,
+    {
+        let incr = (end - start) / (NUM_SAMPLES_IN_OUTPUT as f32);
+
+        let mut interpolator_0 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_1 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_2 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_3 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_4 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_5 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_6 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_7 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_8 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+        let mut interpolator_9 = String::with_capacity(NUM_SAMPLES_IN_OUTPUT);
+
+        let mut index = start;
+        while {
             let interpolator_sample = interpolator
-                .get_interpolated_sample(channel_id, index, 0.0)
+                .get_interpolated_sample(channel_id, index, relative_speed)
                 .unwrap();
             interpolator_0.push_str(if interpolator_sample < -0.8 { "*" } else { " " });
             interpolator_1.push_str(
@@ -356,20 +394,6 @@ mod tests {
 
         let bar = "-".repeat(NUM_SAMPLES_IN_OUTPUT);
 
-        println!("Expected");
-        println!("{}", bar);
-        println!("{}", sample_provider_0);
-        println!("{}", sample_provider_1);
-        println!("{}", sample_provider_2);
-        println!("{}", sample_provider_3);
-        println!("{}", sample_provider_4);
-        println!("{}", sample_provider_5);
-        println!("{}", sample_provider_6);
-        println!("{}", sample_provider_7);
-        println!("{}", sample_provider_8);
-        println!("{}", sample_provider_9);
-        println!("{}", bar);
-        println!();
         println!("Actual");
         println!("{}", bar);
         println!("{}", interpolator_0);
@@ -416,6 +440,7 @@ mod tests {
             50.0,
             "test",
             Box::new(FourSampleWavelengthSignalProvider {}),
+            0.0,
             &interpolator,
         );
 
@@ -457,6 +482,7 @@ mod tests {
             600.0,
             "test",
             Box::new(SignalSampleProvider {}),
+            0.0,
             &interpolator,
         );
 
@@ -519,6 +545,7 @@ mod tests {
             510.0,
             "test",
             Box::new(sine_signal_provider),
+            0.0,
             &interpolator,
         );
 
@@ -661,10 +688,10 @@ mod tests {
 
             match index % 4 {
                 0 => sample += 0.5,
-                1 => {},
+                1 => {}
                 2 => sample -= 0.5,
-                3 => {},
-                _ => return Err(Error::new(ErrorKind::InvalidInput, "Unexpected input"))
+                3 => {}
+                _ => return Err(Error::new(ErrorKind::InvalidInput, "Unexpected input")),
             }
 
             Ok(sample)
@@ -677,6 +704,8 @@ mod tests {
 
         let interpolator = Interpolator::new(10, 8000, sample_provider);
 
+        print_actual_waveform(200.0, 210.0, "test", 2.0, &interpolator);
+
         // Test with relative_speed > 1 which should trigger anti-aliasing filter
         for sample_ctr in 200..300 {
             let actual_sample = interpolator
@@ -685,7 +714,10 @@ mod tests {
             assert(
                 if sample_ctr % 2 == 0 { 0.5 } else { -0.5 },
                 actual_sample,
-                &format!("When reading from a continuous sample at index {}", sample_ctr),
+                &format!(
+                    "When reading from a continuous sample at index {}",
+                    sample_ctr
+                ),
             );
         }
     }
