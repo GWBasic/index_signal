@@ -704,15 +704,24 @@ mod tests {
 
         let interpolator = Interpolator::new(10, 8000, sample_provider);
 
-        print_actual_waveform(200.0, 210.0, "test", 2.0, &interpolator);
+        print_actual_waveform(200.0, 204.0, "test", 2.0, &interpolator);
 
         // Test with relative_speed > 1 which should trigger anti-aliasing filter
         for sample_ctr in 200..300 {
+
+            let expected_sample = match sample_ctr % 4 {
+                0 => 0.5,
+                1 => 0.0,
+                2 => -0.5,
+                3 => 0.0,
+                _ => panic!("CPU can't do math")
+            };
+
             let actual_sample = interpolator
                 .get_interpolated_sample("test", sample_ctr as f32, 2.0)
                 .unwrap();
             assert(
-                if sample_ctr % 2 == 0 { 0.5 } else { -0.5 },
+                expected_sample,
                 actual_sample,
                 &format!(
                     "When reading from a continuous sample at index {}",
