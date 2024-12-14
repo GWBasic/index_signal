@@ -270,7 +270,8 @@ where
         let oversampling_ratio = oversampling_ratio;
 
         let mut transform = Vec::with_capacity(oversampling_ratio);
-        let start_index = index - (oversample_rate * (oversampling_ratio as f32 / 2.0));
+        //let start_index = index - (oversample_rate * (oversampling_ratio as f32 / 2.0));
+        let start_index = index - (oversampling_ratio as f32 / 2.0) + 0.5;
 
         for i in 0..oversampling_ratio {
             let sample_index = start_index + (i as f32 * oversample_rate);
